@@ -1618,8 +1618,13 @@ function goToPage(page) {
   // Stop any playing audio
   document.querySelectorAll(".audio-wrapper audio").forEach(a => { a.pause(); a.remove(); });
   renderPage();
-  // Scroll to table
-  document.getElementById("tableContainer").scrollIntoView({ behavior: "smooth", block: "start" });
+  // Scroll table into view only if its top is above the viewport (behind sticky header)
+  const table = document.getElementById("tableContainer");
+  const headerH = document.querySelector(".header").offsetHeight;
+  const tableTop = table.getBoundingClientRect().top;
+  if (tableTop < headerH) {
+    window.scrollTo({ top: window.scrollY + tableTop - headerH - 12, behavior: "smooth" });
+  }
 }
 
 // ==================== Helpers ====================

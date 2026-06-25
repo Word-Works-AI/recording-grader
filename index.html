@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recording Quality Grader</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #f8f9fc;
+  --bg-hover: #f2f4f8;
+  --bg-badge: #e8ecf4;
+  --text: #1a1a2e;
+  --text-secondary: #5a6070;
+  --text-muted: #8a8fa0;
+  --border: #dfe3eb;
+  --border-focus: #263978;
+  --accent: #263978;
+  --accent-hover: #1e2e63;
+  --accent-light: #eaeffb;
+  --danger: #e54d4d;
+  --danger-hover: #d03b3b;
+  --danger-light: #fef2f2;
+  --success: #22c55e;
+  --success-light: #f0fdf4;
+  --success-bg: #dcfce7;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --transition: 0.2s ease;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-card: #1a1c25;
+  --bg-input: #22252e;
+  --bg-hover: #262930;
+  --bg-badge: #2a2d38;
+  --text: #e8eaef;
+  --text-secondary: #9da3b0;
+  --text-muted: #6b7080;
+  --border: #2e3140;
+  --border-focus: #4a6bc5;
+  --accent: #4a6bc5;
+  --accent-hover: #6882d4;
+  --accent-light: #1e2540;
+  --danger: #f06060;
+  --danger-hover: #f07070;
+  --danger-light: #2d1a1a;
+  --success: #34d673;
+  --success-light: #0d2818;
+  --success-bg: #133a22;
+  --warning: #f5a623;
+  --warning-light: #2d2210;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.5);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  color: var(--text);
+  animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.2s forwards;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error { border-left: 3px solid var(--danger); }
+.toast.info { border-left: 3px solid var(--accent); }
+
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+/* Header */
+.header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-logo {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #263978, #3a5ba8);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: white;
+  font-weight: 700;
+}
+.header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.header h1 span {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 14px;
+  margin-left: 8px;
+}
+
+/* Theme Switcher */
+.theme-switcher {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  padding: 3px;
+  gap: 2px;
+}
+.theme-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-radius: 7px;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.theme-btn:hover { background: var(--bg-hover); color: var(--text); }
+.theme-btn.active {
+  background: var(--accent);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+.theme-btn svg { width: 14px; height: 14px; }
+
+/* Main */
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+
+/* Input Section */
+.input-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+  transition: box-shadow var(--transition);
+}
+.input-section:focus-within {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-focus);
+}
+.input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.input-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+textarea {
+  width: 100%;
+  min-height: 140px;
+  max-height: 300px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+textarea::placeholder { color: var(--text-muted); }
+textarea:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(91,127,245,0.15);
+}
+.input-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+.btn:active { transform: scale(0.97); }
+.btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-light);
+}
+.btn-danger:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* Stats Bar */
+.stats-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-card .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.stat-card .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-card .stat-value.accent { color: var(--accent); }
+.stat-card .stat-value.success { color: var(--success); }
+.stat-card .stat-value.danger { color: var(--danger); }
+.stat-card .stat-value.warning { color: var(--warning); }
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* Table */
+.table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+thead th {
+  background: var(--bg-hover);
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  user-select: none;
+}
+thead th:first-child { padding-left: 20px; }
+tbody tr {
+  transition: background var(--transition);
+  border-bottom: 1px solid var(--border);
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--bg-hover); }
+tbody td {
+  padding: 12px 16px;
+  font-size: 14px;
+  vertical-align: middle;
+}
+tbody td:first-child {
+  padding-left: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+.row-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  background: var(--bg-badge);
+  color: var(--text-muted);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.account-cell {
+  display: flex;
+  align-items: center;
+}
+.assignee-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.assignee-avatar {
+  width: 20px;
+  height: 20px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* Play Button */
+.play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+.play-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+.play-btn.playing {
+  background: var(--success-light);
+  color: var(--success);
+  border-color: var(--success);
+}
+.play-btn svg { width: 14px; height: 14px; }
+
+.audio-wrapper { margin-top: 8px; }
+.audio-wrapper audio {
+  width: 100%;
+  max-width: 280px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+/* Grade Select */
+.grade-select {
+  appearance: none;
+  padding: 7px 32px 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7080' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition);
+  min-width: 110px;
+  font-family: var(--font);
+}
+.grade-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(91,127,245,0.15);
+}
+.grade-select.good {
+  background-color: var(--success-bg);
+  color: #15803d;
+  border-color: var(--success);
+}
+.grade-select.bad {
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Empty State */
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  background: var(--bg-badge);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+.empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 360px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+/* Progress Bar */
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-badge);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #263978, #3a7854);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+/* Confirm Dialog */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
+}
+.dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 0.15s ease;
+}
+.dialog h3 { font-size: 16px; margin-bottom: 8px; }
+.dialog p { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Processing Overlay */
+.processing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+.processing-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 48px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 0.2s ease;
+  min-width: 300px;
+}
+.processing-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 18px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.processing-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+.processing-card p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+.processing-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-badge);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.processing-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #3a5ba8);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+.processing-status { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+
+/* Pagination */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-hover);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.pagination-info strong {
+  color: var(--text);
+}
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pagination-controls .btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  min-width: 32px;
+  justify-content: center;
+}
+.pagination-controls .btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.pagination-controls .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.pagination-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page-size-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+.filter-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.filter-btn .count {
+  font-size: 10px;
+  background: rgba(255,255,255,0.2);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.filter-btn:not(.active) .count {
+  background: var(--bg-badge);
+  color: var(--text-muted);
+}
+
+/* Search & Assignee Filter */
+.search-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-input {
+  padding: 8px 14px 8px 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  min-width: 220px;
+}
+.search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(91,127,245,0.15);
+}
+.search-input::placeholder { color: var(--text-muted); }
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-wrap svg {
+  position: absolute;
+  left: 11px;
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.search-wrap .clear-search {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px;
+  display: none;
+}
+.search-wrap .clear-search.visible { display: block; }
+.search-wrap .clear-search:hover { color: var(--text); }
+.assignee-filter-select {
+  appearance: none;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7080' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font);
+  min-width: 180px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+.assignee-filter-select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(91,127,245,0.15);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header { padding: 12px 16px; }
+  .header h1 span { display: none; }
+  .main { padding: 16px; }
+  .stats-bar { gap: 8px; }
+  .stat-card { min-width: 100px; padding: 12px; }
+  .stat-card .stat-value { font-size: 20px; }
+  .toolbar-group { gap: 4px; }
+  .btn { padding: 7px 12px; font-size: 12px; }
+  .toolbar-divider { display: none; }
+  thead th, tbody td { padding: 10px 12px; font-size: 13px; }
+  .theme-btn span { display: none; }
+  .theme-btn { padding: 6px 10px; }
+  .pagination-bar { padding: 10px 14px; }
+}
+
+@media (max-width: 480px) {
+  .input-section { padding: 16px; }
+  .input-actions { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo">R</div>
+    <h1>Recording Grader <span>Quality Assessment Tool</span></h1>
+  </div>
+  <div class="theme-switcher" id="themeSwitcher">
+    <button class="theme-btn" data-theme="light" title="Light theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <span>Light</span>
+    </button>
+    <button class="theme-btn" data-theme="dark" title="Dark theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <span>Dark</span>
+    </button>
+    <button class="theme-btn" data-theme="system" title="System theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      <span>System</span>
+    </button>
+  </div>
+</header>
+
+<main class="main">
+  <!-- Input Section -->
+  <section class="input-section">
+    <div class="input-header">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Import Data
+      </h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label for="maxRecords" style="font-size:12px;color:var(--text-muted);font-weight:500;">Max records</label>
+        <select id="maxRecords" class="grade-select" style="min-width:80px;" onchange="saveMaxRecords(this.value)">
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="500">500</option>
+          <option value="1000">1,000</option>
+          <option value="5000">5,000</option>
+        </select>
+      </div>
+    </div>
+    <textarea id="inputData" placeholder="Paste tab-separated data here&#10;&#10;3 columns (no grade):&#10;ACC-001&#9;https://example.com/recording.mp3&#9;John Doe&#10;&#10;4 columns (with grade):&#10;ACC-002&#9;https://example.com/recording.mp3&#9;Good&#9;Jane Smith"></textarea>
+    <div class="input-actions">
+      <button class="btn btn-primary" onclick="loadData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Load Paste
+      </button>
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        Import File
+      </button>
+      <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" style="display:none" onchange="importFile(this)">
+      <button class="btn" onclick="clearInput()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Clear Input
+      </button>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card">
+      <div class="stat-label">Total Records</div>
+      <div class="stat-value accent" id="statTotal">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Graded</div>
+      <div class="stat-value" id="statGraded">0</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Good</div>
+      <div class="stat-value success" id="statGood">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Bad</div>
+      <div class="stat-value danger" id="statBad">0</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar" style="display:none">
+    <div class="toolbar-group">
+      <div class="filter-bar" id="filterBar">
+        <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All <span class="count" id="filterCountAll">0</span></button>
+        <button class="filter-btn" data-filter="blank" onclick="setFilter('blank')">Not Graded <span class="count" id="filterCountBlank">0</span></button>
+        <button class="filter-btn" data-filter="Good" onclick="setFilter('Good')">Good <span class="count" id="filterCountGood">0</span></button>
+        <button class="filter-btn" data-filter="Bad" onclick="setFilter('Bad')">Bad <span class="count" id="filterCountBad">0</span></button>
+      </div>
+      <div class="toolbar-divider"></div>
+      <button class="btn btn-sm" onclick="copyColumn('account')" title="Copy all account names">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Accounts
+      </button>
+      <button class="btn btn-sm" onclick="copyColumn('url')" title="Copy all URLs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        URLs
+      </button>
+      <button class="btn btn-sm" onclick="copyColumn('grade')" title="Copy all grades">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Grades
+      </button>
+      <button class="btn btn-sm" onclick="copyColumn('assignee')" title="Copy all assignees">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Assignees
+      </button>
+      <div class="toolbar-divider"></div>
+      <button class="btn btn-sm" onclick="copyAllRows()" title="Copy everything as tab-separated">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h16M4 6h16M4 18h16"/></svg>
+        Copy All
+      </button>
+    </div>
+    <div class="toolbar-group">
+      <button class="btn btn-sm" onclick="exportCSV()" title="Download as CSV file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV
+      </button>
+      <button class="btn btn-sm btn-danger" onclick="confirmClear()" title="Clear all data">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <!-- Search & Assignee Filter -->
+  <div class="search-filter-bar" id="searchFilterBar" style="display:none">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search ACCOUNT_NO..." oninput="onSearchInput(this.value)">
+      <button class="clear-search" id="clearSearchBtn" onclick="clearSearch()">&times;</button>
+    </div>
+    <select class="assignee-filter-select" id="assigneeFilter" onchange="setAssigneeFilter(this.value)">
+      <option value="">All Assignees</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-container" id="tableContainer">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:25%">ACCOUNT_NO</th>
+          <th style="width:35%">RECORDING_URL</th>
+          <th style="width:20%">GRADE</th>
+          <th style="width:20%">ASSIGNEE</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="pagination-bar" id="paginationBar" style="display:none">
+      <div class="pagination-info" id="paginationInfo"></div>
+      <div class="pagination-right">
+        <div class="pagination-controls" id="paginationControls"></div>
+        <div class="page-size-select">
+          <span>Rows:</span>
+          <select class="grade-select" style="min-width:65px;padding:5px 28px 5px 8px;" id="pageSize" onchange="changePageSize(this.value)">
+            <option value="10">10</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const DB_NAME = "RecordingGraderDB";
+const DB_VERSION = 1;
+const STORE_NAME = "records";
+const THEME_KEY = "recording_grader_theme";
+const MAX_KEY = "recording_grader_max";
+const PAGESIZE_KEY = "recording_grader_pagesize";
+
+let db = null;
+let currentPage = 1;
+let currentPageSize = 50;
+let currentFilter = "all";
+let currentAssignee = "";
+let currentSearch = "";
+let searchTimer = null;
+let totalFiltered = 0;
+
+// ==================== IndexedDB ====================
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_NAME)) {
+        const store = d.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+        store.createIndex("grade", "grade", { unique: false });
+      }
+    };
+    req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbClear() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).clear().onsuccess = () => resolve();
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbAddBatch(records) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    records.forEach(r => store.add(r));
+    tx.oncomplete = () => resolve();
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbUpdateGrade(id, grade) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const rec = req.result;
+      rec.grade = grade;
+      store.put(rec).onsuccess = () => resolve();
+    };
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbGetStats() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    let total = 0, good = 0, bad = 0, blank = 0;
+    store.openCursor().onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        total++;
+        if (cursor.value.grade === "Good") good++;
+        else if (cursor.value.grade === "Bad") bad++;
+        else blank++;
+        cursor.continue();
+      } else {
+        resolve({ total, good, bad, blank, graded: good + bad });
+      }
+    };
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbGetFiltered(filter, offset, limit, assignee, search) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const results = [];
+    let totalMatch = 0;
+    let skipped = 0;
+    const searchLower = (search || "").toLowerCase();
+
+    store.openCursor().onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) {
+        resolve({ records: results, totalMatch });
+        return;
+      }
+      const r = cursor.value;
+
+      // Grade filter
+      const gradeMatch = filter === "all" ||
+        (filter === "blank" && !r.grade) ||
+        (filter === "Good" && r.grade === "Good") ||
+        (filter === "Bad" && r.grade === "Bad");
+
+      // Assignee filter
+      const assigneeMatch = !assignee || r.assignee === assignee;
+
+      // Account search
+      const searchMatch = !searchLower || (r.account || "").toLowerCase().includes(searchLower);
+
+      if (gradeMatch && assigneeMatch && searchMatch) {
+        totalMatch++;
+        if (skipped < offset) {
+          skipped++;
+        } else if (results.length < limit) {
+          results.push(r);
+        }
+      }
+      cursor.continue();
+    };
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbGetAssignees() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const assignees = new Set();
+    store.openCursor().onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        if (cursor.value.assignee) assignees.add(cursor.value.assignee);
+        cursor.continue();
+      } else {
+        resolve([...assignees].sort());
+      }
+    };
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+function dbGetAll() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    tx.onerror = (e) => reject(e.target.error);
+  });
+}
+
+// ==================== Processing Overlay ====================
+function showProcessing(title, subtitle) {
+  const el = document.createElement("div");
+  el.className = "processing-overlay";
+  el.id = "processingOverlay";
+  el.innerHTML = `
+    <div class="processing-card">
+      <div class="processing-spinner"></div>
+      <h3 id="procTitle">${title || "Processing..."}</h3>
+      <p id="procSubtitle">${subtitle || "Please wait"}</p>
+      <div class="processing-bar"><div class="processing-bar-fill" id="procBarFill"></div></div>
+      <div class="processing-status" id="procStatus"></div>
+    </div>`;
+  document.body.appendChild(el);
+}
+function updateProcessing(pct, status) {
+  const fill = document.getElementById("procBarFill");
+  const stat = document.getElementById("procStatus");
+  if (fill) fill.style.width = pct + "%";
+  if (stat) stat.textContent = status || "";
+}
+function hideProcessing() {
+  const el = document.getElementById("processingOverlay");
+  if (el) el.remove();
+}
+
+// ==================== Theme ====================
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || "system";
+  applyTheme(saved);
+}
+function applyTheme(theme) {
+  localStorage.setItem(THEME_KEY, theme);
+  document.querySelectorAll(".theme-btn").forEach(b => b.classList.toggle("active", b.dataset.theme === theme));
+  if (theme === "system") {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  } else {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+}
+document.getElementById("themeSwitcher").addEventListener("click", e => {
+  const btn = e.target.closest(".theme-btn");
+  if (btn) applyTheme(btn.dataset.theme);
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (localStorage.getItem(THEME_KEY) === "system") applyTheme("system");
+});
+
+// ==================== Toast ====================
+function toast(msg, type = "success") {
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  const icons = { success: "\u2713", error: "\u2717", info: "\u2139" };
+  el.innerHTML = `<strong>${icons[type] || ""}</strong> ${msg}`;
+  document.getElementById("toastContainer").appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+// ==================== Settings ====================
+function saveMaxRecords(val) { localStorage.setItem(MAX_KEY, val); }
+function initMaxRecords() {
+  const saved = localStorage.getItem(MAX_KEY) || "50";
+  document.getElementById("maxRecords").value = saved;
+}
+function initPageSize() {
+  const saved = localStorage.getItem(PAGESIZE_KEY) || "50";
+  currentPageSize = parseInt(saved);
+  document.getElementById("pageSize").value = saved;
+}
+function changePageSize(val) {
+  currentPageSize = parseInt(val);
+  localStorage.setItem(PAGESIZE_KEY, val);
+  currentPage = 1;
+  renderPage();
+}
+
+// ==================== Filter & Search ====================
+function setFilter(filter) {
+  currentFilter = filter;
+  currentPage = 1;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === filter));
+  renderPage();
+}
+
+function setAssigneeFilter(val) {
+  currentAssignee = val;
+  currentPage = 1;
+  renderPage();
+}
+
+function onSearchInput(val) {
+  clearTimeout(searchTimer);
+  const clearBtn = document.getElementById("clearSearchBtn");
+  clearBtn.classList.toggle("visible", val.length > 0);
+  searchTimer = setTimeout(() => {
+    currentSearch = val.trim();
+    currentPage = 1;
+    renderPage();
+  }, 300);
+}
+
+function clearSearch() {
+  document.getElementById("searchInput").value = "";
+  document.getElementById("clearSearchBtn").classList.remove("visible");
+  currentSearch = "";
+  currentPage = 1;
+  renderPage();
+}
+
+// ==================== Init ====================
+window.onload = async () => {
+  initTheme();
+  initMaxRecords();
+  initPageSize();
+  await openDB();
+  renderPage();
+};
+
+// ==================== Parse helpers ====================
+function parseRowCols(cols) {
+  if (cols.length >= 4) {
+    const rawGrade = (cols[2] || "").trim().toLowerCase();
+    const grade = rawGrade === "good" ? "Good" : rawGrade === "bad" ? "Bad" : "";
+    return { account: (cols[0] || "").trim(), url: (cols[1] || "").trim(), grade, assignee: (cols[3] || "").trim() };
+  } else if (cols.length === 3) {
+    return { account: (cols[0] || "").trim(), url: (cols[1] || "").trim(), grade: "", assignee: (cols[2] || "").trim() };
+  }
+  return null;
+}
+
+function isHeaderRow(cols) {
+  const headers = ["account_no", "account", "recording_url", "recording", "url", "grade", "assignee", "sr", "no", "s.no", "sr.no", "sno"];
+  const first = (cols[0] || "").trim().toLowerCase().replace(/[^a-z0-9_.]/g, "");
+  return headers.some(h => first === h || first.includes(h));
+}
+
+// ==================== Load Paste ====================
+async function loadData() {
+  const text = document.getElementById("inputData").value.trim();
+  if (!text) return toast("Paste some data first", "error");
+
+  const lines = text.split(/\r?\n/).filter(x => x.trim());
+  const maxLimit = parseInt(document.getElementById("maxRecords").value);
+  if (lines.length > maxLimit) return toast(`Too many rows (${lines.length.toLocaleString()}). Max is ${maxLimit.toLocaleString()}.`, "error");
+
+  showProcessing("Loading pasted data", `Parsing ${lines.length.toLocaleString()} rows`);
+  updateProcessing(10, "Reading data...");
+
+  await new Promise(r => setTimeout(r, 100));
+
+  const records = [];
+  for (let idx = 0; idx < lines.length; idx++) {
+    const cols = lines[idx].split("\t").filter(x => x.trim() !== "");
+    const row = parseRowCols(cols);
+    if (row && row.account) records.push(row);
+  }
+
+  updateProcessing(40, `Parsed ${records.length.toLocaleString()} valid records`);
+  await new Promise(r => setTimeout(r, 150));
+
+  if (!records.length) { hideProcessing(); return toast("No valid rows found. Use tab-separated format.", "error"); }
+
+  updateProcessing(50, "Saving to database...");
+  await dbClear();
+
+  // Batch insert in chunks for large datasets
+  const CHUNK = 500;
+  for (let i = 0; i < records.length; i += CHUNK) {
+    const chunk = records.slice(i, i + CHUNK);
+    await dbAddBatch(chunk);
+    const pct = 50 + Math.round((i / records.length) * 35);
+    updateProcessing(pct, `Saved ${Math.min(i + CHUNK, records.length).toLocaleString()} of ${records.length.toLocaleString()} records...`);
+  }
+
+  updateProcessing(90, "Rendering table...");
+  await new Promise(r => setTimeout(r, 150));
+
+  currentPage = 1;
+  currentFilter = "all";
+  currentAssignee = "";
+  currentSearch = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("clearSearchBtn").classList.remove("visible");
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+  await renderPage();
+
+  updateProcessing(100, "Complete!");
+  await new Promise(r => setTimeout(r, 300));
+  hideProcessing();
+  toast(`Loaded ${records.length.toLocaleString()} record${records.length > 1 ? "s" : ""}`, "success");
+}
+
+// ==================== Import File ====================
+async function finishImport(records, source) {
+  updateProcessing(50, "Saving to database...");
+  await dbClear();
+
+  const CHUNK = 500;
+  for (let i = 0; i < records.length; i += CHUNK) {
+    const chunk = records.slice(i, i + CHUNK);
+    await dbAddBatch(chunk);
+    const pct = 50 + Math.round((i / records.length) * 35);
+    updateProcessing(pct, `Saved ${Math.min(i + CHUNK, records.length).toLocaleString()} of ${records.length.toLocaleString()} records...`);
+  }
+
+  updateProcessing(90, "Rendering table...");
+  await new Promise(r => setTimeout(r, 150));
+
+  currentPage = 1;
+  currentFilter = "all";
+  currentAssignee = "";
+  currentSearch = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("clearSearchBtn").classList.remove("visible");
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+  await renderPage();
+
+  updateProcessing(100, "Complete!");
+  await new Promise(r => setTimeout(r, 300));
+  hideProcessing();
+  toast(`Imported ${records.length.toLocaleString()} record${records.length > 1 ? "s" : ""} from ${source}`, "success");
+}
+
+function importFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = "";
+
+  const ext = file.name.split(".").pop().toLowerCase();
+  const fileName = file.name;
+  const fileSize = (file.size / 1024).toFixed(1);
+
+  if (ext !== "csv" && ext !== "xls" && ext !== "xlsx") {
+    return toast("Unsupported file type. Use CSV or Excel (.xls/.xlsx)", "error");
+  }
+
+  showProcessing("Importing file", `${fileName} (${fileSize} KB)`);
+  updateProcessing(5, "Reading file...");
+
+  if (ext === "csv") {
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      updateProcessing(20, "Parsing CSV...");
+      await new Promise(r => setTimeout(r, 100));
+
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(x => x.trim());
+      if (!lines.length) { hideProcessing(); return toast("File is empty", "error"); }
+
+      updateProcessing(30, `Found ${lines.length.toLocaleString()} rows, parsing...`);
+
+      const parsedLines = lines.map(line => {
+        const cols = [];
+        let current = "", inQuotes = false;
+        for (let c of line) {
+          if (c === '"') { inQuotes = !inQuotes; }
+          else if (c === ',' && !inQuotes) { cols.push(current); current = ""; }
+          else { current += c; }
+        }
+        cols.push(current);
+        return cols;
+      });
+
+      let startIdx = 0;
+      if (parsedLines.length > 0 && isHeaderRow(parsedLines[0])) startIdx = 1;
+
+      const dataLines = parsedLines.slice(startIdx);
+      const maxLimit = parseInt(document.getElementById("maxRecords").value);
+      if (dataLines.length > maxLimit) { hideProcessing(); return toast(`Too many rows (${dataLines.length.toLocaleString()}). Max is ${maxLimit.toLocaleString()}.`, "error"); }
+
+      updateProcessing(40, `Processing ${dataLines.length.toLocaleString()} records...`);
+
+      const records = [];
+      dataLines.forEach(cols => {
+        const row = parseRowCols(cols);
+        if (row && row.account) records.push(row);
+      });
+
+      if (!records.length) { hideProcessing(); return toast("No valid rows found in CSV", "error"); }
+
+      await finishImport(records, "CSV");
+    };
+    reader.readAsText(file);
+
+  } else {
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+      updateProcessing(20, "Parsing Excel file...");
+      await new Promise(r => setTimeout(r, 100));
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+        updateProcessing(35, "Reading spreadsheet data...");
+
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows.length) { hideProcessing(); return toast("File is empty", "error"); }
+
+        let startIdx = 0;
+        if (rows.length > 0 && isHeaderRow(rows[0].map(String))) startIdx = 1;
+
+        const dataRows = rows.slice(startIdx);
+        const maxLimit = parseInt(document.getElementById("maxRecords").value);
+        if (dataRows.length > maxLimit) { hideProcessing(); return toast(`Too many rows (${dataRows.length.toLocaleString()}). Max is ${maxLimit.toLocaleString()}.`, "error"); }
+
+        updateProcessing(45, `Processing ${dataRows.length.toLocaleString()} records...`);
+
+        const records = [];
+        dataRows.forEach(cols => {
+          const strCols = cols.map(c => String(c));
+          const row = parseRowCols(strCols);
+          if (row && row.account) records.push(row);
+        });
+
+        if (!records.length) { hideProcessing(); return toast("No valid rows found in Excel file", "error"); }
+
+        await finishImport(records, "Excel");
+      } catch(err) {
+        hideProcessing();
+        toast("Failed to parse Excel file.", "error");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+// ==================== Render ====================
+async function renderPage() {
+  const stats = await dbGetStats();
+  const { total, good, bad, blank, graded } = stats;
+  const pct = total ? Math.round((graded / total) * 100) : 0;
+
+  document.getElementById("statTotal").textContent = total.toLocaleString();
+  document.getElementById("statGraded").textContent = graded.toLocaleString();
+  document.getElementById("statGood").textContent = good.toLocaleString();
+  document.getElementById("statBad").textContent = bad.toLocaleString();
+  document.getElementById("progressFill").style.width = pct + "%";
+
+  // Filter counts
+  document.getElementById("filterCountAll").textContent = total.toLocaleString();
+  document.getElementById("filterCountBlank").textContent = blank.toLocaleString();
+  document.getElementById("filterCountGood").textContent = good.toLocaleString();
+  document.getElementById("filterCountBad").textContent = bad.toLocaleString();
+
+  const toolbar = document.getElementById("toolbar");
+  const searchFilterBar = document.getElementById("searchFilterBar");
+  toolbar.style.display = total ? "flex" : "none";
+  searchFilterBar.style.display = total ? "flex" : "none";
+
+  // Populate assignee dropdown
+  const assigneeSelect = document.getElementById("assigneeFilter");
+  const prevAssignee = assigneeSelect.value;
+  const assignees = total ? await dbGetAssignees() : [];
+  assigneeSelect.innerHTML = '<option value="">All Assignees (' + assignees.length + ')</option>';
+  assignees.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = a;
+    opt.textContent = a;
+    if (a === currentAssignee) opt.selected = true;
+    assigneeSelect.appendChild(opt);
+  });
+
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+
+  if (total === 0) {
+    document.getElementById("paginationBar").style.display = "none";
+    tbody.innerHTML = `
+      <tr><td colspan="4">
+        <div class="empty-state">
+          <div class="empty-icon">&#127911;</div>
+          <h3>No recordings loaded</h3>
+          <p>Paste your tab-separated data above or import a file to get started with grading.</p>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  const offset = (currentPage - 1) * currentPageSize;
+  const { records, totalMatch } = await dbGetFiltered(currentFilter, offset, currentPageSize, currentAssignee, currentSearch);
+  totalFiltered = totalMatch;
+
+  if (records.length === 0 && totalMatch === 0) {
+    document.getElementById("paginationBar").style.display = "none";
+    tbody.innerHTML = `
+      <tr><td colspan="4">
+        <div class="empty-state">
+          <div class="empty-icon">&#128269;</div>
+          <h3>No matching records</h3>
+          <p>No records match the current filters. Try changing the grade filter, assignee, or search term.</p>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  // Adjust page if out of bounds
+  const totalPages = Math.ceil(totalMatch / currentPageSize);
+  if (currentPage > totalPages) {
+    currentPage = totalPages;
+    return renderPage();
+  }
+
+  records.forEach((r, idx) => {
+    const globalIdx = offset + idx + 1;
+    const initials = r.assignee ? r.assignee.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase() : "?";
+    const gradeClass = r.grade === "Good" ? "good" : r.grade === "Bad" ? "bad" : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <div class="account-cell">
+          <span class="row-number">${globalIdx}</span>
+          ${escapeHtml(r.account)}
+        </div>
+      </td>
+      <td>
+        <button class="play-btn" onclick="playAudio(${r.id}, this)" id="play-btn-${r.id}">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Play
+        </button>
+        <div class="audio-wrapper" id="audio-${r.id}"></div>
+      </td>
+      <td>
+        <select class="grade-select ${gradeClass}" onchange="updateGrade(${r.id}, this)">
+          <option value="">-- Select --</option>
+          <option value="Good" ${r.grade === "Good" ? "selected" : ""}>Good</option>
+          <option value="Bad" ${r.grade === "Bad" ? "selected" : ""}>Bad</option>
+        </select>
+      </td>
+      <td>
+        <span class="assignee-tag">
+          <span class="assignee-avatar">${initials}</span>
+          ${escapeHtml(r.assignee)}
+        </span>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Pagination
+  renderPagination(totalMatch, totalPages);
+}
+
+function renderPagination(totalMatch, totalPages) {
+  const bar = document.getElementById("paginationBar");
+  bar.style.display = "flex";
+
+  const start = (currentPage - 1) * currentPageSize + 1;
+  const end = Math.min(currentPage * currentPageSize, totalMatch);
+  document.getElementById("paginationInfo").innerHTML = `Showing <strong>${start.toLocaleString()}</strong> - <strong>${end.toLocaleString()}</strong> of <strong>${totalMatch.toLocaleString()}</strong> records`;
+
+  const controls = document.getElementById("paginationControls");
+  let html = "";
+
+  // Prev
+  html += `<button class="btn" onclick="goToPage(${currentPage - 1})" ${currentPage <= 1 ? "disabled" : ""}>&laquo;</button>`;
+
+  // Page numbers - show smart range
+  const maxButtons = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+
+  if (startPage > 1) {
+    html += `<button class="btn" onclick="goToPage(1)">1</button>`;
+    if (startPage > 2) html += `<span style="padding:0 4px;color:var(--text-muted)">...</span>`;
+  }
+
+  for (let p = startPage; p <= endPage; p++) {
+    html += `<button class="btn ${p === currentPage ? "active" : ""}" onclick="goToPage(${p})">${p}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += `<span style="padding:0 4px;color:var(--text-muted)">...</span>`;
+    html += `<button class="btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  // Next
+  html += `<button class="btn" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages ? "disabled" : ""}>&raquo;</button>`;
+
+  controls.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(totalFiltered / currentPageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  // Stop any playing audio
+  document.querySelectorAll(".audio-wrapper audio").forEach(a => { a.pause(); a.remove(); });
+  renderPage();
+  // Scroll to table
+  document.getElementById("tableContainer").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ==================== Helpers ====================
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function playAudio(id, btn) {
+  const wrapper = document.getElementById("audio-" + id);
+  const existing = wrapper.querySelector("audio");
+
+  if (existing) {
+    existing.pause();
+    wrapper.innerHTML = "";
+    btn.classList.remove("playing");
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+    return;
+  }
+
+  document.querySelectorAll(".audio-wrapper audio").forEach(a => { a.pause(); a.remove(); });
+  document.querySelectorAll(".play-btn.playing").forEach(b => {
+    b.classList.remove("playing");
+    b.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+  });
+
+  // Get URL from DB
+  const tx = db.transaction(STORE_NAME, "readonly");
+  tx.objectStore(STORE_NAME).get(id).onsuccess = (e) => {
+    const rec = e.target.result;
+    if (!rec) return;
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.autoplay = true;
+    audio.src = rec.url;
+    audio.style.cssText = "width:100%;max-width:280px;height:32px;margin-top:8px;border-radius:6px";
+    wrapper.innerHTML = "";
+    wrapper.appendChild(audio);
+    btn.classList.add("playing");
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Playing`;
+
+    audio.addEventListener("ended", () => {
+      btn.classList.remove("playing");
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+    });
+    audio.addEventListener("pause", () => {
+      if (audio.ended) return;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+      btn.classList.remove("playing");
+    });
+    audio.addEventListener("play", () => {
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Playing`;
+      btn.classList.add("playing");
+    });
+  };
+}
+
+async function updateGrade(id, sel) {
+  await dbUpdateGrade(id, sel.value);
+  sel.className = "grade-select " + (sel.value === "Good" ? "good" : sel.value === "Bad" ? "bad" : "");
+
+  // Update stats without re-rendering whole table
+  const stats = await dbGetStats();
+  const pct = stats.total ? Math.round((stats.graded / stats.total) * 100) : 0;
+  document.getElementById("statGraded").textContent = stats.graded.toLocaleString();
+  document.getElementById("statGood").textContent = stats.good.toLocaleString();
+  document.getElementById("statBad").textContent = stats.bad.toLocaleString();
+  document.getElementById("progressFill").style.width = pct + "%";
+
+  document.getElementById("filterCountAll").textContent = stats.total.toLocaleString();
+  document.getElementById("filterCountBlank").textContent = stats.blank.toLocaleString();
+  document.getElementById("filterCountGood").textContent = stats.good.toLocaleString();
+  document.getElementById("filterCountBad").textContent = stats.bad.toLocaleString();
+}
+
+async function copyColumn(c) {
+  const records = await dbGetAll();
+  const txt = records.map(r => r[c] || "").join("\n");
+  await navigator.clipboard.writeText(txt);
+  const labels = { account: "Accounts", url: "URLs", assignee: "Assignees", grade: "Grades" };
+  toast(`${labels[c]} copied to clipboard`, "info");
+}
+
+async function copyAllRows() {
+  const records = await dbGetAll();
+  const rows = [["ACCOUNT_NO", "RECORDING_URL", "GRADE", "ASSIGNEE"].join("\t")];
+  records.forEach(r => rows.push([r.account, r.url, r.grade, r.assignee || ""].join("\t")));
+  await navigator.clipboard.writeText(rows.join("\n"));
+  toast("All rows copied to clipboard", "info");
+}
+
+async function exportCSV() {
+  const records = await dbGetAll();
+  if (!records.length) return toast("No data to export", "error");
+  const rows = [["ACCOUNT_NO", "RECORDING_URL", "GRADE", "ASSIGNEE"]];
+  records.forEach(r => rows.push([r.account, r.url, r.grade, r.assignee]));
+  const csv = rows.map(r => r.map(v => `"${(v || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "recording_grades.csv";
+  a.click();
+  toast("CSV exported successfully", "success");
+}
+
+function clearInput() {
+  document.getElementById("inputData").value = "";
+}
+
+function confirmClear() {
+  const overlay = document.createElement("div");
+  overlay.className = "dialog-overlay";
+  overlay.innerHTML = `
+    <div class="dialog">
+      <h3>Clear all data?</h3>
+      <p>This will permanently delete all loaded records and grades from the database. This action cannot be undone.</p>
+      <div class="dialog-actions">
+        <button class="btn" onclick="this.closest('.dialog-overlay').remove()">Cancel</button>
+        <button class="btn btn-danger" onclick="clearAllData(); this.closest('.dialog-overlay').remove()">Delete All</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function clearAllData() {
+  await dbClear();
+  document.getElementById("inputData").value = "";
+  currentPage = 1;
+  currentFilter = "all";
+  currentAssignee = "";
+  currentSearch = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("clearSearchBtn").classList.remove("visible");
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+  await renderPage();
+  toast("All data cleared", "success");
+}
+</script>
+</body>
+</html>

@@ -1615,8 +1615,7 @@ function goToPage(page) {
   const totalPages = Math.ceil(totalFiltered / currentPageSize);
   if (page < 1 || page > totalPages) return;
   currentPage = page;
-  // Stop any playing audio
-  document.querySelectorAll(".audio-wrapper audio").forEach(a => { a.pause(); a.remove(); });
+  stopAllAudio();
   renderPage();
   // Scroll table into view only if its top is above the viewport (behind sticky header)
   const table = document.getElementById("tableContainer");
@@ -1634,54 +1633,161 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
+function getAudioMime(url) {
+  const ext = (url.split("?")[0].split("#")[0].split(".").pop() || "").toLowerCase();
+  const mimeMap = {
+    mp3: "audio/mpeg", mpeg: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg", oga: "audio/ogg",
+    opus: "audio/opus",
+    m4a: "audio/mp4", mp4: "audio/mp4", aac: "audio/aac",
+    webm: "audio/webm",
+    flac: "audio/flac",
+    wma: "audio/x-ms-wma",
+    amr: "audio/amr",
+    "3gp": "audio/3gpp", "3gpp": "audio/3gpp"
+  };
+  return mimeMap[ext] || "";
+}
+
+function resetPlayBtn(btn) {
+  btn.classList.remove("playing");
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+}
+
+function setPlayingBtn(btn) {
+  btn.classList.add("playing");
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Playing`;
+}
+
+function stopAllAudio() {
+  document.querySelectorAll(".audio-wrapper").forEach(w => {
+    const a = w.querySelector("audio");
+    if (a) { a.pause(); a.removeAttribute("src"); a.load(); }
+    w.innerHTML = "";
+  });
+  document.querySelectorAll(".play-btn.playing").forEach(b => resetPlayBtn(b));
+}
+
 function playAudio(id, btn) {
   const wrapper = document.getElementById("audio-" + id);
   const existing = wrapper.querySelector("audio");
 
   if (existing) {
     existing.pause();
+    existing.removeAttribute("src");
+    existing.load();
     wrapper.innerHTML = "";
-    btn.classList.remove("playing");
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
+    resetPlayBtn(btn);
     return;
   }
 
-  document.querySelectorAll(".audio-wrapper audio").forEach(a => { a.pause(); a.remove(); });
-  document.querySelectorAll(".play-btn.playing").forEach(b => {
-    b.classList.remove("playing");
-    b.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
-  });
+  stopAllAudio();
 
   // Get URL from DB
   const tx = db.transaction(STORE_NAME, "readonly");
   tx.objectStore(STORE_NAME).get(id).onsuccess = (e) => {
     const rec = e.target.result;
-    if (!rec) return;
+    if (!rec || !rec.url) { toast("No recording URL found", "error"); return; }
+
+    const url = rec.url.trim();
+    const mime = getAudioMime(url);
+
+    // Check for formats known to have poor browser support
+    const poorSupportFormats = ["audio/x-ms-wma", "audio/amr"];
+    if (poorSupportFormats.includes(mime)) {
+      // Try anyway, but warn and offer fallback immediately
+      wrapper.innerHTML = "";
+      const fallbackMsg = document.createElement("div");
+      fallbackMsg.style.cssText = "margin-top:8px;font-size:12px;color:var(--warning);display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+      fallbackMsg.innerHTML = `
+        <span>This format (${mime.split("/").pop().toUpperCase()}) may not play in all browsers.</span>
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+           style="color:var(--accent);text-decoration:underline;font-weight:600;cursor:pointer;">
+          Open in external player
+        </a>`;
+      wrapper.appendChild(fallbackMsg);
+      resetPlayBtn(btn);
+      return;
+    }
 
     const audio = document.createElement("audio");
     audio.controls = true;
-    audio.autoplay = true;
-    audio.src = rec.url;
+    audio.preload = "auto";
+    // Note: intentionally NOT setting crossOrigin — it would break playback
+    // on servers that don't send CORS headers. Audio plays cross-origin fine without it.
     audio.style.cssText = "width:100%;max-width:280px;height:32px;margin-top:8px;border-radius:6px";
+
+    // Use <source> element with type hint for better codec negotiation
+    const source = document.createElement("source");
+    source.src = url;
+    if (mime) source.type = mime;
+    audio.appendChild(source);
+
+    // Error handler on <source> — fires when the source fails
+    source.addEventListener("error", () => {
+      handleAudioError(wrapper, btn, url);
+    });
+
+    // Error handler on <audio> — catches network/decode errors
+    audio.addEventListener("error", () => {
+      handleAudioError(wrapper, btn, url);
+    });
+
+    // Stall/timeout detection — if nothing loads in 15s, show fallback
+    let loadTimeout = setTimeout(() => {
+      if (audio.readyState < 2) { // HAVE_CURRENT_DATA
+        handleAudioError(wrapper, btn, url, "Playback timed out.");
+      }
+    }, 15000);
+
+    audio.addEventListener("canplay", () => {
+      clearTimeout(loadTimeout);
+    });
+
+    audio.addEventListener("loadeddata", () => {
+      clearTimeout(loadTimeout);
+    });
+
     wrapper.innerHTML = "";
     wrapper.appendChild(audio);
-    btn.classList.add("playing");
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Playing`;
+    setPlayingBtn(btn);
 
-    audio.addEventListener("ended", () => {
-      btn.classList.remove("playing");
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
-    });
-    audio.addEventListener("pause", () => {
-      if (audio.ended) return;
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play`;
-      btn.classList.remove("playing");
-    });
-    audio.addEventListener("play", () => {
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Playing`;
-      btn.classList.add("playing");
-    });
+    // Try to play — handle autoplay restrictions (Safari, iOS, etc.)
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        // Autoplay blocked (common on Safari/iOS) — audio controls are still visible
+        // User can tap the native controls to play
+        if (err.name === "NotAllowedError") {
+          resetPlayBtn(btn);
+          // Don't remove audio — let user tap native play button
+        } else {
+          // Actual playback error
+          handleAudioError(wrapper, btn, url);
+        }
+      });
+    }
+
+    audio.addEventListener("ended", () => resetPlayBtn(btn));
+    audio.addEventListener("pause", () => { if (!audio.ended) resetPlayBtn(btn); });
+    audio.addEventListener("play", () => setPlayingBtn(btn));
   };
+}
+
+function handleAudioError(wrapper, btn, url, extraMsg) {
+  resetPlayBtn(btn);
+  wrapper.innerHTML = "";
+  const errorDiv = document.createElement("div");
+  errorDiv.style.cssText = "margin-top:8px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+  errorDiv.innerHTML = `
+    <span>${extraMsg || "Unable to play this recording in the browser."}</span>
+    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"
+       style="color:var(--accent);text-decoration:underline;font-weight:600;cursor:pointer;"
+       download>
+      Download / Open externally
+    </a>`;
+  wrapper.appendChild(errorDiv);
 }
 
 async function updateGrade(id, sel) {
